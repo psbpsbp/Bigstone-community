@@ -4,6 +4,6 @@
 
 ## Deployment
 
-Projcet is live at:
+Project is live at:
 
 **https://www.community.bigstone.ovh**
