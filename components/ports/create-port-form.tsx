@@ -196,6 +196,7 @@ export default function CreatePortForm() {
                     <SelectContent>
                       <SelectItem value="BIN">Binary (BIN)</SelectItem>
                       <SelectItem value="HEX">Hexadecimal (HEX)</SelectItem>
+                      <SelectItem value="ITEM">Item Port (ITEM)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
