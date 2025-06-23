@@ -462,6 +462,12 @@ export default function ProjectDetailPage() {
             {/* Schematics Tab */}
             <TabsContent value="schematics">
               <div className="space-y-6">
+                <Alert variant="default">
+                  <AlertDescription>
+                    <strong>Note:</strong> To upload schematic, upload it to <a href="https://file.io" className="underline text-blue-600" target="_blank" rel="noopener noreferrer">file.io</a> first and make an announcement, since schematics aren't operational just yet.
+                  </AlertDescription>
+                </Alert>
+
                 {/* Upload Schematic */}
                 <Card>
                   <CardHeader>
