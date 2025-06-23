@@ -464,7 +464,7 @@ export default function ProjectDetailPage() {
               <div className="space-y-6">
                 <Alert variant="default">
                   <AlertDescription>
-                    <strong>Note:</strong> To upload schematic, upload it to <a href="https://drive.google.com/drive/folders/1XUrSFkjh8wvqizTHwZK7ly7JZyZXDHLp?usp=sharing" className="underline text-blue-600" target="_blank" rel="noopener noreferrer">file.io</a> first and make an announcement, since schematics aren't operational just yet. The link is the shared google drive folder for schematics. Upload your's, copy the link to your file and paste it in an announcement.
+                    <strong>Note:</strong> To upload schematic, upload it to <a href="https://drive.google.com/drive/folders/1XUrSFkjh8wvqizTHwZK7ly7JZyZXDHLp?usp=sharing" className="underline text-blue-600" target="_blank" rel="noopener noreferrer">[the shared google drive folder for all schematics]</a> first and make an announcement, since schematics aren't operational just yet.
                   </AlertDescription>
                 </Alert>
 
