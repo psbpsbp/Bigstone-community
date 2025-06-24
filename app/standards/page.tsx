@@ -8,12 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Plus, ThumbsUp, ThumbsDown, Clock, CheckCircle, XCircle } from "lucide-react"
-
-// Adjust import paths if needed
-import DatabaseStatus from "../components/ui/database-status"
-import { supabase } from "../lib/supabase"
-import { useSession } from "../lib/session"
-import Header from "../components/layout/header"
+import DatabaseStatus from "@/components/ui/database-status"
+import { supabase } from "@/lib/supabase"
+import { useSession } from "@/lib/session"
+import Header from "@/components/layout/header"
 
 interface Standard {
   id: string
@@ -28,8 +26,6 @@ interface Standard {
 
 export default function StandardsPage() {
   const { user } = useSession()
-  const isAdmin = user?.username === "aFormalParrot"
-
   const [standards, setStandards] = useState<Standard[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -40,14 +36,28 @@ export default function StandardsPage() {
   }, [])
 
   const fetchStandards = async () => {
-    const { data, error } = await supabase
-      .from("standards")
-      .select(`*, votes(vote_type, user_id)`)
-      .order("created_at", { ascending: false })
+    if (!supabase) {
+      setError("Database connection not configured. Please add Supabase integration to access standards.")
+      setLoading(false)
+      return
+    }
 
-    if (error) setError(error.message)
-    else setStandards(data || [])
-    setLoading(false)
+    try {
+      const { data, error } = await supabase
+        .from("standards")
+        .select(
+          *,
+          votes(vote_type, user_id)
+        )
+        .order("created_at", { ascending: false })
+
+      if (error) throw error
+      setStandards(data || [])
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch standards")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleVote = async (standardId: string, voteType: "approve" | "deny") => {
@@ -60,6 +70,7 @@ export default function StandardsPage() {
     setError("")
 
     try {
+      // Check if user already voted
       const { data: existingVote } = await supabase
         .from("votes")
         .select("*")
@@ -68,20 +79,26 @@ export default function StandardsPage() {
         .single()
 
       if (existingVote) {
-        await supabase
+        // Update existing vote
+        const { error } = await supabase
           .from("votes")
           .update({ vote_type: voteType })
           .eq("standard_id", standardId)
           .eq("user_id", user.id)
       } else {
-        await supabase.from("votes").insert([
+        // Insert new vote
+        const { error } = await supabase.from("votes").insert([
           {
             standard_id: standardId,
             user_id: user.id,
             vote_type: voteType,
           },
         ])
+
+        if (error) throw error
       }
+
+      // Refresh standards to show updated vote counts
       fetchStandards()
     } catch (err: any) {
       setError(err.message || "Failed to submit vote")
@@ -108,6 +125,7 @@ export default function StandardsPage() {
     const denyCount = votes.filter((v) => v.vote_type === "deny").length
     const total = approveCount + denyCount
     const approvePercentage = total > 0 ? (approveCount / total) * 100 : 0
+
     return { approveCount, denyCount, total, approvePercentage }
   }
 
@@ -132,23 +150,9 @@ export default function StandardsPage() {
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
 
     if (hours > 0) {
-      return `${hours}h ${minutes}m remaining`
+      return ${hours}h ${minutes}m remaining
     }
-    return `${minutes}m remaining`
-  }
-
-  const handleUpdateVotingTime = async (standard: Standard) => {
-    if (!isAdmin) return
-    const hours = parseInt(prompt("Enter additional hours to add to voting time:", "1") || "0")
-    const minutes = parseInt(prompt("Enter additional minutes:", "0") || "0")
-    if (isNaN(hours) || isNaN(minutes)) return
-
-    const newDate = new Date(standard.voting_ends_at)
-    newDate.setHours(newDate.getHours() + hours)
-    newDate.setMinutes(newDate.getMinutes() + minutes)
-
-    await supabase.from("standards").update({ voting_ends_at: newDate.toISOString() }).eq("id", standard.id)
-    fetchStandards()
+    return ${minutes}m remaining
   }
 
   if (loading) {
@@ -161,23 +165,26 @@ export default function StandardsPage() {
     )
   }
 
-  if (error) {
-    return (
-      <Alert variant="destructive" className="mb-6">
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    )
+  if (error && !supabase) {
+    return <DatabaseStatus error={error} />
   }
 
   return (
     <>
       <Header />
       <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Community Standards</h1>
             <p className="mt-2 text-gray-600">Vote on proposed standards and guidelines</p>
           </div>
+
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
           {/* Create Button */}
           <div className="flex justify-center mb-8">
@@ -262,9 +269,10 @@ export default function StandardsPage() {
                               <Button
                                 onClick={() => handleVote(standard.id, "approve")}
                                 disabled={votingLoading === standard.id}
-                                className={`flex-1 ${userVote === "approve" ? "bg-green-700" : "bg-green-600 hover:bg-green-700"}`}
+                                className={flex-1 ${userVote === "approve" ? "bg-green-700" : "bg-green-600 hover:bg-green-700"}}
                               >
-                                Approve
+                                <ThumbsUp className="w-4 h-4 mr-2" />
+                                {userVote === "approve" ? "Approved" : "Approve"}
                               </Button>
                               <Button
                                 onClick={() => handleVote(standard.id, "deny")}
@@ -272,7 +280,8 @@ export default function StandardsPage() {
                                 variant={userVote === "deny" ? "default" : "destructive"}
                                 className="flex-1"
                               >
-                                Deny
+                                <ThumbsDown className="w-4 h-4 mr-2" />
+                                {userVote === "deny" ? "Denied" : "Deny"}
                               </Button>
                             </div>
                           )}
@@ -288,15 +297,6 @@ export default function StandardsPage() {
                         </div>
                       )}
 
-                      {/* ADMIN ONLY: Change Vote Time Button */}
-                      {isAdmin && (
-                        <div className="mt-4">
-                          <Button size="sm" variant="outline" onClick={() => handleUpdateVotingTime(standard)}>
-                            ⏱ Change Vote Time
-                          </Button>
-                        </div>
-                      )}
-
                       <div className="text-xs text-gray-500 border-t pt-2">
                         Proposed {new Date(standard.created_at).toLocaleDateString()}
                       </div>
@@ -306,6 +306,15 @@ export default function StandardsPage() {
               )
             })}
           </div>
+
+          {standards.length === 0 && !loading && supabase && (
+            <div className="text-center py-12">
+              <div className="text-gray-500 mb-4">No standards proposed yet.</div>
+              <Button asChild>
+                <Link href="/standards/create">Propose the First Standard</Link>
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </>
