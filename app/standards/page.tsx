@@ -7,11 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Plus, ThumbsUp, ThumbsDown, Clock, CheckCircle, XCircle, X, Merge } from "lucide-react"
+import { Plus, ThumbsUp, ThumbsDown, Clock, CheckCircle, XCircle, X, Merge, Edit } from "lucide-react"
 import DatabaseStatus from "@/components/ui/database-status"
 import { supabase } from "@/lib/supabase"
 import { useSession } from "@/lib/session"
 import Header from "@/components/layout/header"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 
 interface Standard {
   id: string
@@ -33,6 +36,7 @@ export default function StandardsPage() {
   const [votingLoading, setVotingLoading] = useState<string | null>(null)
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [mergingId, setMergingId] = useState<string | null>(null)
+  const [editingStandard, setEditingStandard] = useState<Standard | null>(null)
 
   useEffect(() => {
     fetchStandards()
@@ -139,6 +143,38 @@ export default function StandardsPage() {
     }
   }
 
+  const handleEditRequest = (standard: Standard) => {
+    setEditingStandard(standard)
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingStandard || !supabase || !user) return
+
+    try {
+      // Set voting period to 1 hour from now
+      const votingEndsAt = new Date()
+      votingEndsAt.setHours(votingEndsAt.getHours() + 1)
+
+      const { error } = await supabase
+        .from("standards")
+        .update({
+          title: editingStandard.title,
+          description: editingStandard.description,
+          content: editingStandard.content,
+          status: "voting",
+          voting_ends_at: votingEndsAt.toISOString()
+        })
+        .eq("id", editingStandard.id)
+
+      if (error) throw error
+      setEditingStandard(null)
+      fetchStandards()
+    } catch (err: any) {
+      setError(err.message || "Failed to start edit vote")
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "voting":
@@ -210,10 +246,12 @@ export default function StandardsPage() {
       <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative">
         {/* Side Panel Toggle Button */}
         <button
-          onClick={() => setIsPanelOpen(true)}
+          onClick={() => setIsPanelOpen(!isPanelOpen)}
           className="fixed right-0 top-1/2 transform -translate-y-1/2 bg-white px-3 py-4 rounded-l-lg shadow-md border border-gray-200 border-r-0 hover:bg-gray-50 z-10 transition-colors duration-200"
         >
-          <span className="text-sm font-medium">View Standards</span>
+          <span className="text-sm font-medium">
+            {isPanelOpen ? "Hide Standards" : "View Standards"}
+          </span>
         </button>
 
         {/* Side Panel */}
@@ -237,19 +275,79 @@ export default function StandardsPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {mergedStandards.map(standard => (
-                    <div key={standard.id} className="border-b pb-4 last:border-b-0">
-                      <h3 className="font-bold">{standard.title}</h3>
-                      <p className="text-sm text-gray-500 whitespace-pre-wrap mt-1">
-                        {standard.description}
-                      </p>
-                    </div>
-                  ))}
+                  {mergedStandards.map(standard => {
+                    const isCreator = user?.id === standard.created_by
+                    return (
+                      <div key={standard.id} className="border-b pb-4 last:border-b-0">
+                        <div className="flex justify-between items-start">
+                          <h3 className="font-bold">{standard.title}</h3>
+                          {isCreator && (
+                            <button
+                              onClick={() => handleEditRequest(standard)}
+                              className="p-1 text-gray-500 hover:text-gray-700"
+                              aria-label="Edit standard"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-500 whitespace-pre-wrap mt-1">
+                          {standard.description}
+                        </p>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
           </div>
         </div>
+
+        {/* Edit Modal */}
+        {editingStandard && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30">
+            <div className="bg-white p-6 rounded-lg max-w-md w-full">
+              <h3 className="text-lg font-bold mb-4">Edit Standard</h3>
+              <form onSubmit={handleEditSubmit}>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Title</Label>
+                    <Input
+                      value={editingStandard.title}
+                      onChange={(e) => setEditingStandard({...editingStandard, title: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label>Description</Label>
+                    <Input
+                      value={editingStandard.description}
+                      onChange={(e) => setEditingStandard({...editingStandard, description: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label>Content</Label>
+                    <Textarea
+                      value={editingStandard.content}
+                      onChange={(e) => setEditingStandard({...editingStandard, content: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditingStandard(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit">
+                    Submit for Voting (1 hour)
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Main Content */}
         <div className="max-w-4xl mx-auto">
@@ -302,7 +400,74 @@ export default function StandardsPage() {
 
                       {standard.status === "voting" && (
                         <div className="border-t pt-4">
-                          {/* ... voting UI remains the same ... */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Clock className="w-4 h-4" />
+                              {getTimeRemaining(standard.voting_ends_at)}
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              {voteStats.total} vote{voteStats.total !== 1 ? "s" : ""}
+                            </div>
+                          </div>
+
+                          {voteStats.total > 0 && (
+                            <div className="mb-4">
+                              <div className="flex justify-between text-sm mb-1">
+                                <span className="text-green-600">Approve: {voteStats.approveCount}</span>
+                                <span className="text-red-600">Deny: {voteStats.denyCount}</span>
+                              </div>
+                              <Progress value={voteStats.approvePercentage} className="h-2" />
+                            </div>
+                          )}
+
+                          {userVote && (
+                            <div className="mb-3 text-sm text-center">
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                                {userVote === "approve" ? (
+                                  <>
+                                    <CheckCircle className="w-3 h-3" />
+                                    You voted to approve
+                                  </>
+                                ) : (
+                                  <>
+                                    <XCircle className="w-3 h-3" />
+                                    You voted to deny
+                                  </>
+                                )}
+                              </span>
+                            </div>
+                          )}
+
+                          {votingActive && user && (
+                            <div className="flex gap-3">
+                              <Button
+                                onClick={() => handleVote(standard.id, "approve")}
+                                disabled={votingLoading === standard.id}
+                                className={`flex-1 ${userVote === "approve" ? "bg-green-700" : "bg-green-600 hover:bg-green-700"}`}
+                              >
+                                <ThumbsUp className="w-4 h-4 mr-2" />
+                                {userVote === "approve" ? "Approved" : "Approve"}
+                              </Button>
+                              <Button
+                                onClick={() => handleVote(standard.id, "deny")}
+                                disabled={votingLoading === standard.id}
+                                variant={userVote === "deny" ? "default" : "destructive"}
+                                className="flex-1"
+                              >
+                                <ThumbsDown className="w-4 h-4 mr-2" />
+                                {userVote === "deny" ? "Denied" : "Deny"}
+                              </Button>
+                            </div>
+                          )}
+
+                          {votingActive && !user && (
+                            <div className="text-center py-4">
+                              <p className="text-gray-600 mb-3">Sign in to vote on this standard</p>
+                              <Button asChild>
+                                <Link href="/auth/signin">Sign In to Vote</Link>
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       )}
 
