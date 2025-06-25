@@ -196,6 +196,7 @@ export default function CreatePortForm() {
                     <SelectContent>
                       <SelectItem value="BIN">Binary (BIN)</SelectItem>
                       <SelectItem value="HEX">Hexadecimal (HEX)</SelectItem>
+                      <SelectItem value="ITEM">Item</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -228,6 +229,8 @@ export default function CreatePortForm() {
                       <SelectItem value="STATE">State</SelectItem>
                       <SelectItem value="CLK">Clock</SelectItem>
                       <SelectItem value="RST">Reset</SelectItem>
+                      <SelectItem value="WATER">Water stream</SelectItem>
+                      <SelectItem value="HOPPER">Hopper</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
