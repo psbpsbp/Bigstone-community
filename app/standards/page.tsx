@@ -188,11 +188,6 @@ export default function StandardsPage() {
             </Alert>
           )}
 
-          {supabase && (
-            <div className="mb-6">
-              <DatabaseStatus />
-            </div>
-          )}
           <div className="flex justify-center mb-8">
             <Button asChild>
               <Link href="/standards/create" className="flex items-center gap-2">
@@ -201,11 +196,7 @@ export default function StandardsPage() {
               </Link>
             </Button>
           </div>
-          <div className="mb-6 text-center">
-            <p className="text-sm text-gray-500">
-              Standards are proposed by community members and voted on by all users. Each standard is open for voting for 24 hours.
-            </p>
-          
+
           <div className="space-y-6">
             {standards.map((standard) => {
               const voteStats = getVoteStats(standard.votes)
