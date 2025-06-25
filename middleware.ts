@@ -13,5 +13,6 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/play/:path*", "/welcome/:path*"], // apply only to these routes
-}
+    matcher: ["/:path*"], // runs on ALL routes
+  }
+  
