@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -13,6 +12,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CheckCircle, ArrowLeft } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useSession } from "@/lib/session"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 export default function CreateStandardForm() {
   const { user } = useSession()
@@ -24,13 +30,14 @@ export default function CreateStandardForm() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [votingDuration, setVotingDuration] = useState("24") // Default to 24 hours
+  const [customDuration, setCustomDuration] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setLoading(true)
 
-    // Check if Supabase is configured
     if (!supabase) {
       setError("Database connection not configured. Please set up Supabase environment variables.")
       setLoading(false)
@@ -44,12 +51,27 @@ export default function CreateStandardForm() {
     }
 
     try {
+      // Calculate voting end time
+      const durationHours = votingDuration === "custom" 
+        ? parseInt(customDuration) 
+        : parseInt(votingDuration)
+      
+      if (isNaN(durationHours) || durationHours <= 0) {
+        throw new Error("Invalid voting duration")
+      }
+
+      const votingEndsAt = new Date()
+      votingEndsAt.setHours(votingEndsAt.getHours() + durationHours)
+
       const { error: insertError } = await supabase.from("standards").insert([
         {
           title: formData.title,
           description: formData.description,
           content: formData.content,
-          created_by: user.id, // Now using actual user ID
+          created_by: user.id,
+          created_by_name: user.email, // or user.name if available
+          voting_ends_at: votingEndsAt.toISOString(),
+          status: "voting",
         },
       ])
 
@@ -73,7 +95,7 @@ export default function CreateStandardForm() {
             <div>
               <CardTitle className="text-xl text-green-600">Standard Submitted!</CardTitle>
               <CardDescription>
-                Your standard has been submitted for community voting. Voting will be open for 24 hours.
+                Your standard has been submitted for community voting.
               </CardDescription>
             </div>
           </div>
@@ -92,7 +114,6 @@ export default function CreateStandardForm() {
 
   return (
     <div className="space-y-6">
-      {/* Back to Home Button */}
       <div className="flex justify-start">
         <Button asChild variant="outline" className="flex items-center gap-2">
           <Link href="/dashboard">
@@ -106,7 +127,7 @@ export default function CreateStandardForm() {
         <CardHeader>
           <CardTitle className="text-xl">Propose New Standard</CardTitle>
           <CardDescription>
-            Submit a new standard for community voting. All users will have 24 hours to vote.
+            Submit a new standard for community voting.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -143,12 +164,52 @@ export default function CreateStandardForm() {
               <Label htmlFor="content">Detailed Content</Label>
               <Textarea
                 id="content"
-                placeholder="Provide detailed explanation of the standard, including examples and rationale..."
+                placeholder="Provide detailed explanation of the standard..."
                 className="min-h-[200px]"
                 value={formData.content}
                 onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
                 required
               />
+            </div>
+
+            {/* Voting Duration Selector */}
+            <div className="space-y-2">
+              <Label>Voting Duration</Label>
+              <div className="flex gap-2">
+                <Select 
+                  value={votingDuration}
+                  onValueChange={(value) => setVotingDuration(value)}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select duration" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 hour</SelectItem>
+                    <SelectItem value="6">6 hours</SelectItem>
+                    <SelectItem value="24">24 hours</SelectItem>
+                    <SelectItem value="72">3 days</SelectItem>
+                    <SelectItem value="120">5 days</SelectItem>
+                    {user?.email === "aFormalParrot@example.com" && (
+                      <SelectItem value="custom">Custom</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+
+                {votingDuration === "custom" && (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="1"
+                      max="720" // 30 days
+                      value={customDuration}
+                      onChange={(e) => setCustomDuration(e.target.value)}
+                      placeholder="Hours"
+                      className="w-24"
+                    />
+                    <span className="text-sm text-gray-500">hours</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
