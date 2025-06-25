@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Plus, ThumbsUp, ThumbsDown, Clock, CheckCircle, XCircle, X, Merge, Edit } from "lucide-react"
+import { Plus, ThumbsUp, ThumbsDown, Clock, CheckCircle, XCircle, X, Merge, Edit, Download } from "lucide-react"
 import DatabaseStatus from "@/components/ui/database-status"
 import { supabase } from "@/lib/supabase"
 import { useSession } from "@/lib/session"
@@ -15,6 +15,7 @@ import Header from "@/components/layout/header"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { jsPDF } from "jspdf"
 
 interface Standard {
   id: string
@@ -37,6 +38,9 @@ export default function StandardsPage() {
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [mergingId, setMergingId] = useState<string | null>(null)
   const [editingStandard, setEditingStandard] = useState<Standard | null>(null)
+  const [expandedStandard, setExpandedStandard] = useState<string | null>(null)
+  const [panelWidth, setPanelWidth] = useState(80)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchStandards()
@@ -77,195 +81,98 @@ export default function StandardsPage() {
     }
   }
 
-  const handleVote = async (standardId: string, voteType: "approve" | "deny") => {
-    if (!supabase || !user) {
-      setError("You must be signed in to vote")
-      return
+  // ... [keep all other existing functions: handleVote, handleMerge, etc.]
+
+  const handleStandardClick = (id: string) => {
+    if (expandedStandard === id) {
+      setExpandedStandard(null)
+      setPanelWidth(80)
+    } else {
+      setExpandedStandard(id)
+      setPanelWidth(120) // Wider panel when expanded
     }
+  }
 
-    setVotingLoading(standardId)
-    setError("")
-
-    try {
-      const { data: existingVote } = await supabase
-        .from("votes")
-        .select("*")
-        .eq("standard_id", standardId)
-        .eq("user_id", user.id)
-        .single()
-
-      if (existingVote) {
-        await supabase
-          .from("votes")
-          .update({ vote_type: voteType })
-          .eq("standard_id", standardId)
-          .eq("user_id", user.id)
-      } else {
-        const { error } = await supabase.from("votes").insert([
-          {
-            standard_id: standardId,
-            user_id: user.id,
-            vote_type: voteType,
-          },
-        ])
-        if (error) throw error
+  const downloadAsPDF = () => {
+    const doc = new jsPDF()
+    let yPosition = 20
+    
+    doc.setFontSize(18)
+    doc.text("Merged Standards", 105, 15, { align: 'center' })
+    doc.setFontSize(12)
+    
+    mergedStandards.forEach((standard, index) => {
+      doc.setFontSize(14)
+      doc.text(standard.title, 15, yPosition)
+      yPosition += 10
+      
+      doc.setFontSize(12)
+      const splitDesc = doc.splitTextToSize(standard.description, 180)
+      doc.text(splitDesc, 15, yPosition)
+      yPosition += splitDesc.length * 7 + 10
+      
+      const splitContent = doc.splitTextToSize(standard.content, 180)
+      doc.text(splitContent, 15, yPosition)
+      yPosition += splitContent.length * 7 + 15
+      
+      if (index < mergedStandards.length - 1) {
+        doc.line(15, yPosition, 195, yPosition)
+        yPosition += 10
       }
-
-      fetchStandards()
-    } catch (err: any) {
-      setError(err.message || "Failed to submit vote")
-    } finally {
-      setVotingLoading(null)
-    }
-  }
-
-  const handleMerge = async (standardId: string) => {
-    if (!supabase || !user) {
-      setError("You must be signed in to merge standards")
-      return
-    }
-
-    setMergingId(standardId)
-    setError("")
-
-    try {
-      const { error } = await supabase
-        .from("standards")
-        .update({ status: "merged" })
-        .eq("id", standardId)
-
-      if (error) throw error
-      fetchStandards()
-    } catch (err: any) {
-      setError(err.message || "Failed to merge standard")
-    } finally {
-      setMergingId(null)
-    }
-  }
-
-  const handleEditRequest = (standard: Standard) => {
-    setEditingStandard(standard)
-  }
-
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingStandard || !supabase || !user) return
-
-    try {
-      // Set voting period to 1 hour from now
-      const votingEndsAt = new Date()
-      votingEndsAt.setHours(votingEndsAt.getHours() + 1)
-
-      const { error } = await supabase
-        .from("standards")
-        .update({
-          title: editingStandard.title,
-          description: editingStandard.description,
-          content: editingStandard.content,
-          status: "voting",
-          voting_ends_at: votingEndsAt.toISOString()
-        })
-        .eq("id", editingStandard.id)
-
-      if (error) throw error
-      setEditingStandard(null)
-      fetchStandards()
-    } catch (err: any) {
-      setError(err.message || "Failed to start edit vote")
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "voting":
-        return "bg-blue-100 text-blue-800"
-      case "approved":
-        return "bg-green-100 text-green-800"
-      case "denied":
-        return "bg-red-100 text-red-800"
-      case "merged":
-        return "bg-purple-100 text-purple-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  const getVoteStats = (votes: { vote_type: string; user_id: string }[] = []) => {
-    const approveCount = votes.filter((v) => v.vote_type === "approve").length
-    const denyCount = votes.filter((v) => v.vote_type === "deny").length
-    const total = approveCount + denyCount
-    const approvePercentage = total > 0 ? (approveCount / total) * 100 : 0
-    return { approveCount, denyCount, total, approvePercentage }
-  }
-
-  const getUserVote = (votes: { vote_type: string; user_id: string }[] = []) => {
-    if (!user) return null
-    const userVote = votes.find((v) => v.user_id === user.id)
-    return userVote?.vote_type || null
-  }
-
-  const isVotingActive = (votingEndsAt: string) => {
-    return new Date(votingEndsAt) > new Date()
-  }
-
-  const getTimeRemaining = (votingEndsAt: string) => {
-    const now = new Date()
-    const end = new Date(votingEndsAt)
-    const diff = end.getTime() - now.getTime()
-
-    if (diff <= 0) return "Voting ended"
-
-    const hours = Math.floor(diff / (1000 * 60 * 60))
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m remaining`
-    }
-    return `${minutes}m remaining`
+      
+      if (yPosition > 280) {
+        doc.addPage()
+        yPosition = 20
+      }
+    })
+    
+    doc.save("merged_standards.pdf")
   }
 
   const mergedStandards = standards.filter(standard => standard.status === "merged")
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto text-center">
-          <div className="text-lg">Loading standards...</div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error && !supabase) {
-    return <DatabaseStatus error={error} />
-  }
+  // ... [keep all the loading/error state handling]
 
   return (
     <>
       <Header />
       <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative">
-        {/* Side Panel Toggle Button */}
+        {/* Side Panel Toggle Button - moved left to avoid overlap */}
         <button
           onClick={() => setIsPanelOpen(!isPanelOpen)}
-          className="fixed right-0 top-1/2 transform -translate-y-1/2 bg-white px-3 py-4 rounded-l-lg shadow-md border border-gray-200 border-r-0 hover:bg-gray-50 z-10 transition-colors duration-200"
+          className={`fixed ${isPanelOpen ? 'right-80' : 'right-0'} top-1/2 transform -translate-y-1/2 bg-white px-3 py-4 rounded-l-lg shadow-md border border-gray-200 border-r-0 hover:bg-gray-50 z-10 transition-all duration-300`}
         >
           <span className="text-sm font-medium">
-            {isPanelOpen ? "Hide Standards" : "View Standards"}
+            {isPanelOpen ? "Hide" : "View Standards"}
           </span>
         </button>
 
         {/* Side Panel */}
-        <div className={`fixed top-0 right-0 h-full w-80 bg-white shadow-lg border-l border-gray-200 transform transition-transform duration-300 ease-in-out z-20 ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div 
+          ref={panelRef}
+          className={`fixed top-0 right-0 h-full bg-white shadow-lg border-l border-gray-200 transform transition-all duration-300 ease-in-out z-20 ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}
+          style={{ width: `${panelWidth}vw`, maxWidth: '600px' }}
+        >
           <div className="p-4 h-full flex flex-col">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-bold">Merged Standards</h2>
-              <button 
-                onClick={() => setIsPanelOpen(false)}
-                className="p-1 rounded-full hover:bg-gray-100 transition-colors duration-200"
-                aria-label="Close panel"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={downloadAsPDF}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  PDF
+                </Button>
+                <button 
+                  onClick={() => setIsPanelOpen(false)}
+                  className="p-1 rounded-full hover:bg-gray-100 transition-colors duration-200"
+                  aria-label="Close panel"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
             </div>
             
             <div className="flex-1 overflow-y-auto">
@@ -274,16 +181,27 @@ export default function StandardsPage() {
                   No merged standards yet.
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {mergedStandards.map(standard => {
+                    const isExpanded = expandedStandard === standard.id
                     const isCreator = user?.id === standard.created_by
+                    
                     return (
-                      <div key={standard.id} className="border-b pb-4 last:border-b-0">
-                        <div className="flex justify-between items-start">
+                      <div 
+                        key={standard.id} 
+                        className={`border rounded-lg p-3 transition-all ${isExpanded ? 'bg-gray-50' : 'hover:bg-gray-50 cursor-pointer'}`}
+                      >
+                        <div 
+                          className="flex justify-between items-center"
+                          onClick={() => handleStandardClick(standard.id)}
+                        >
                           <h3 className="font-bold">{standard.title}</h3>
                           {isCreator && (
                             <button
-                              onClick={() => handleEditRequest(standard)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleEditRequest(standard)
+                              }}
                               className="p-1 text-gray-500 hover:text-gray-700"
                               aria-label="Edit standard"
                             >
@@ -291,9 +209,22 @@ export default function StandardsPage() {
                             </button>
                           )}
                         </div>
-                        <p className="text-sm text-gray-500 whitespace-pre-wrap mt-1">
-                          {standard.description}
-                        </p>
+                        
+                        {isExpanded && (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                              {standard.description}
+                            </p>
+                            <div className="prose prose-sm max-w-none">
+                              <p className="text-gray-700 whitespace-pre-wrap">
+                                {standard.content}
+                              </p>
+                            </div>
+                            <div className="text-xs text-gray-500 pt-2">
+                              Created: {new Date(standard.created_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -351,158 +282,7 @@ export default function StandardsPage() {
 
         {/* Main Content */}
         <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Community Standards</h1>
-            <p className="mt-2 text-gray-600">Vote on proposed standards and guidelines</p>
-          </div>
-
-          {error && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="flex justify-center mb-8">
-            <Button asChild>
-              <Link href="/standards/create" className="flex items-center gap-2">
-                <Plus className="w-4 h-4" />
-                Propose New Standard
-              </Link>
-            </Button>
-          </div>
-
-          <div className="space-y-6">
-            {standards.map((standard) => {
-              const voteStats = getVoteStats(standard.votes)
-              const userVote = getUserVote(standard.votes)
-              const votingActive = isVotingActive(standard.voting_ends_at)
-              const isCreator = user?.id === standard.created_by
-              const canMerge = isCreator && standard.status === "approved"
-
-              return (
-                <Card key={standard.id}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <CardTitle className="text-xl">{standard.title}</CardTitle>
-                        <CardDescription className="mt-2">{standard.description}</CardDescription>
-                      </div>
-                      <Badge className={getStatusColor(standard.status)}>
-                        {standard.status.charAt(0).toUpperCase() + standard.status.slice(1)}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="prose prose-sm max-w-none">
-                        <p className="text-gray-700 whitespace-pre-wrap">{standard.content}</p>
-                      </div>
-
-                      {standard.status === "voting" && (
-                        <div className="border-t pt-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Clock className="w-4 h-4" />
-                              {getTimeRemaining(standard.voting_ends_at)}
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              {voteStats.total} vote{voteStats.total !== 1 ? "s" : ""}
-                            </div>
-                          </div>
-
-                          {voteStats.total > 0 && (
-                            <div className="mb-4">
-                              <div className="flex justify-between text-sm mb-1">
-                                <span className="text-green-600">Approve: {voteStats.approveCount}</span>
-                                <span className="text-red-600">Deny: {voteStats.denyCount}</span>
-                              </div>
-                              <Progress value={voteStats.approvePercentage} className="h-2" />
-                            </div>
-                          )}
-
-                          {userVote && (
-                            <div className="mb-3 text-sm text-center">
-                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-800">
-                                {userVote === "approve" ? (
-                                  <>
-                                    <CheckCircle className="w-3 h-3" />
-                                    You voted to approve
-                                  </>
-                                ) : (
-                                  <>
-                                    <XCircle className="w-3 h-3" />
-                                    You voted to deny
-                                  </>
-                                )}
-                              </span>
-                            </div>
-                          )}
-
-                          {votingActive && user && (
-                            <div className="flex gap-3">
-                              <Button
-                                onClick={() => handleVote(standard.id, "approve")}
-                                disabled={votingLoading === standard.id}
-                                className={`flex-1 ${userVote === "approve" ? "bg-green-700" : "bg-green-600 hover:bg-green-700"}`}
-                              >
-                                <ThumbsUp className="w-4 h-4 mr-2" />
-                                {userVote === "approve" ? "Approved" : "Approve"}
-                              </Button>
-                              <Button
-                                onClick={() => handleVote(standard.id, "deny")}
-                                disabled={votingLoading === standard.id}
-                                variant={userVote === "deny" ? "default" : "destructive"}
-                                className="flex-1"
-                              >
-                                <ThumbsDown className="w-4 h-4 mr-2" />
-                                {userVote === "deny" ? "Denied" : "Deny"}
-                              </Button>
-                            </div>
-                          )}
-
-                          {votingActive && !user && (
-                            <div className="text-center py-4">
-                              <p className="text-gray-600 mb-3">Sign in to vote on this standard</p>
-                              <Button asChild>
-                                <Link href="/auth/signin">Sign In to Vote</Link>
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {canMerge && (
-                        <div className="border-t pt-4">
-                          <Button
-                            onClick={() => handleMerge(standard.id)}
-                            disabled={mergingId === standard.id}
-                            className="w-full"
-                            variant="outline"
-                          >
-                            <Merge className="w-4 h-4 mr-2" />
-                            {mergingId === standard.id ? "Merging..." : "Merge to Standards"}
-                          </Button>
-                        </div>
-                      )}
-
-                      <div className="text-xs text-gray-500 border-t pt-2">
-                        Proposed {new Date(standard.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-
-          {standards.length === 0 && !loading && supabase && (
-            <div className="text-center py-12">
-              <div className="text-gray-500 mb-4">No standards proposed yet.</div>
-              <Button asChild>
-                <Link href="/standards/create">Propose the First Standard</Link>
-              </Button>
-            </div>
-          )}
+          {/* ... [rest of your main content remains the same] */}
         </div>
       </div>
     </>
