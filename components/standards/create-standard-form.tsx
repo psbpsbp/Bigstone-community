@@ -30,8 +30,11 @@ export default function CreateStandardForm() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [votingDuration, setVotingDuration] = useState("24") // Default to 24 hours
+  const [durationType, setDurationType] = useState("hours") // 'seconds' or 'hours'
+  const [durationValue, setDurationValue] = useState("24") // Default to 24 hours
   const [customDuration, setCustomDuration] = useState("")
+
+  const isAdmin = user?.email === "a.e.makarov13@icloud.com" // Adjust this to your admin check
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,7 +42,7 @@ export default function CreateStandardForm() {
     setLoading(true)
 
     if (!supabase) {
-      setError("Database connection not configured. Please set up Supabase environment variables.")
+      setError("Database connection not configured.")
       setLoading(false)
       return
     }
@@ -52,16 +55,23 @@ export default function CreateStandardForm() {
 
     try {
       // Calculate voting end time
-      const durationHours = votingDuration === "custom" 
-        ? parseInt(customDuration) 
-        : parseInt(votingDuration)
+      let durationMs = 0
       
-      if (isNaN(durationHours) || durationHours <= 0) {
-        throw new Error("Invalid voting duration")
+      if (durationValue === "custom") {
+        const customValue = parseInt(customDuration)
+        if (isNaN(customValue) || customValue <= 0) {
+          throw new Error("Invalid duration value")
+        }
+        durationMs = durationType === "seconds" 
+          ? customValue * 1000 
+          : customValue * 60 * 60 * 1000
+      } else {
+        durationMs = durationType === "seconds"
+          ? parseInt(durationValue) * 1000
+          : parseInt(durationValue) * 60 * 60 * 1000
       }
 
-      const votingEndsAt = new Date()
-      votingEndsAt.setHours(votingEndsAt.getHours() + durationHours)
+      const votingEndsAt = new Date(Date.now() + durationMs)
 
       const { error: insertError } = await supabase.from("standards").insert([
         {
@@ -69,7 +79,7 @@ export default function CreateStandardForm() {
           description: formData.description,
           content: formData.content,
           created_by: user.id,
-          created_by_name: user.email, // or user.name if available
+          created_by_name: user.email,
           voting_ends_at: votingEndsAt.toISOString(),
           status: "voting",
         },
@@ -175,38 +185,70 @@ export default function CreateStandardForm() {
             {/* Voting Duration Selector */}
             <div className="space-y-2">
               <Label>Voting Duration</Label>
+              
+              {isAdmin && (
+                <div className="flex gap-2 mb-2">
+                  <Button
+                    type="button"
+                    variant={durationType === "seconds" ? "default" : "outline"}
+                    onClick={() => setDurationType("seconds")}
+                    size="sm"
+                  >
+                    Seconds
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={durationType === "hours" ? "default" : "outline"}
+                    onClick={() => setDurationType("hours")}
+                    size="sm"
+                  >
+                    Hours
+                  </Button>
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <Select 
-                  value={votingDuration}
-                  onValueChange={(value) => setVotingDuration(value)}
+                  value={durationValue}
+                  onValueChange={(value) => setDurationValue(value)}
                 >
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Select duration" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">1 hour</SelectItem>
-                    <SelectItem value="6">6 hours</SelectItem>
-                    <SelectItem value="24">24 hours</SelectItem>
-                    <SelectItem value="72">3 days</SelectItem>
-                    <SelectItem value="120">5 days</SelectItem>
-                    {user?.email === "aFormalParrot@example.com" && (
-                      <SelectItem value="custom">Custom</SelectItem>
+                    {durationType === "seconds" ? (
+                      <>
+                        <SelectItem value="10">10 seconds</SelectItem>
+                        <SelectItem value="60">1 minute</SelectItem>
+                        {isAdmin && <SelectItem value="custom">Custom</SelectItem>}
+                      </>
+                    ) : (
+                      <>
+                        <SelectItem value="1">1 hour</SelectItem>
+                        <SelectItem value="6">6 hours</SelectItem>
+                        <SelectItem value="24">24 hours</SelectItem>
+                        <SelectItem value="72">3 days</SelectItem>
+                        <SelectItem value="120">5 days</SelectItem>
+                        {isAdmin && <SelectItem value="custom">Custom</SelectItem>}
+                      </>
                     )}
                   </SelectContent>
                 </Select>
 
-                {votingDuration === "custom" && (
+                {durationValue === "custom" && (
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"
                       min="1"
-                      max="720" // 30 days
+                      max={durationType === "seconds" ? "86400" : "720"} // Max 24h in seconds or 30d in hours
                       value={customDuration}
                       onChange={(e) => setCustomDuration(e.target.value)}
-                      placeholder="Hours"
+                      placeholder={durationType === "seconds" ? "Seconds" : "Hours"}
                       className="w-24"
                     />
-                    <span className="text-sm text-gray-500">hours</span>
+                    <span className="text-sm text-gray-500">
+                      {durationType === "seconds" ? "seconds" : "hours"}
+                    </span>
                   </div>
                 )}
               </div>
