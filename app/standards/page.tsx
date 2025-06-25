@@ -9,10 +9,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Plus, Pencil, Trash2, FileDown } from "lucide-react"
 
 // Replace alias imports with relative paths if needed for your env
-import DatabaseStatus from "../components/ui/database-status"
-import { supabase } from "../lib/supabase"
-import { useSession } from "../lib/session"
-import Header from "../components/layout/header"
+import DatabaseStatus from "../../components/ui/database-status"
+import { supabase } from "../../lib/supabase"
+import { useSession } from "../../lib/session"
+import Header from "../../components/layout/header"
 
 interface Standard {
   id: string
