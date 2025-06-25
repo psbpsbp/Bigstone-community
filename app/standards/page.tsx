@@ -45,10 +45,19 @@ export default function StandardsPage() {
     try {
       const { data, error } = await supabase
         .from("standards")
-        .select(
-          *,
-          votes(vote_type, user_id)
-        )
+        .select(`
+          id,
+          title,
+          description,
+          content,
+          status,
+          created_at,
+          voting_ends_at,
+          votes (
+            vote_type,
+            user_id
+          )
+        `)
         .order("created_at", { ascending: false })
 
       if (error) throw error
@@ -70,7 +79,6 @@ export default function StandardsPage() {
     setError("")
 
     try {
-      // Check if user already voted
       const { data: existingVote } = await supabase
         .from("votes")
         .select("*")
@@ -79,14 +87,12 @@ export default function StandardsPage() {
         .single()
 
       if (existingVote) {
-        // Update existing vote
-        const { error } = await supabase
+        await supabase
           .from("votes")
           .update({ vote_type: voteType })
           .eq("standard_id", standardId)
           .eq("user_id", user.id)
       } else {
-        // Insert new vote
         const { error } = await supabase.from("votes").insert([
           {
             standard_id: standardId,
@@ -94,11 +100,9 @@ export default function StandardsPage() {
             vote_type: voteType,
           },
         ])
-
         if (error) throw error
       }
 
-      // Refresh standards to show updated vote counts
       fetchStandards()
     } catch (err: any) {
       setError(err.message || "Failed to submit vote")
@@ -125,7 +129,6 @@ export default function StandardsPage() {
     const denyCount = votes.filter((v) => v.vote_type === "deny").length
     const total = approveCount + denyCount
     const approvePercentage = total > 0 ? (approveCount / total) * 100 : 0
-
     return { approveCount, denyCount, total, approvePercentage }
   }
 
@@ -150,9 +153,9 @@ export default function StandardsPage() {
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
 
     if (hours > 0) {
-      return ${hours}h ${minutes}m remaining
+      return `${hours}h ${minutes}m remaining`
     }
-    return ${minutes}m remaining
+    return `${minutes}m remaining`
   }
 
   if (loading) {
@@ -174,7 +177,6 @@ export default function StandardsPage() {
       <Header />
       <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
-          {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Community Standards</h1>
             <p className="mt-2 text-gray-600">Vote on proposed standards and guidelines</p>
@@ -186,7 +188,11 @@ export default function StandardsPage() {
             </Alert>
           )}
 
-          {/* Create Button */}
+          {supabase && (
+            <div className="mb-6">
+              <DatabaseStatus />
+            </div>
+          )}
           <div className="flex justify-center mb-8">
             <Button asChild>
               <Link href="/standards/create" className="flex items-center gap-2">
@@ -195,8 +201,11 @@ export default function StandardsPage() {
               </Link>
             </Button>
           </div>
-
-          {/* Standards List */}
+          <div className="mb-6 text-center">
+            <p className="text-sm text-gray-500">
+              Standards are proposed by community members and voted on by all users. Each standard is open for voting for 24 hours.
+            </p>
+          
           <div className="space-y-6">
             {standards.map((standard) => {
               const voteStats = getVoteStats(standard.votes)
@@ -222,7 +231,6 @@ export default function StandardsPage() {
                         <p className="text-gray-700 whitespace-pre-wrap">{standard.content}</p>
                       </div>
 
-                      {/* Voting Section */}
                       {standard.status === "voting" && (
                         <div className="border-t pt-4">
                           <div className="flex items-center justify-between mb-3">
@@ -245,7 +253,6 @@ export default function StandardsPage() {
                             </div>
                           )}
 
-                          {/* Show user's current vote */}
                           {userVote && (
                             <div className="mb-3 text-sm text-center">
                               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-800">
@@ -269,7 +276,7 @@ export default function StandardsPage() {
                               <Button
                                 onClick={() => handleVote(standard.id, "approve")}
                                 disabled={votingLoading === standard.id}
-                                className={flex-1 ${userVote === "approve" ? "bg-green-700" : "bg-green-600 hover:bg-green-700"}}
+                                className={`flex-1 ${userVote === "approve" ? "bg-green-700" : "bg-green-600 hover:bg-green-700"}`}
                               >
                                 <ThumbsUp className="w-4 h-4 mr-2" />
                                 {userVote === "approve" ? "Approved" : "Approve"}
